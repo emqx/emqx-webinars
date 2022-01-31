@@ -1,0 +1,486 @@
+Version 0.1m
+Step 0 - Demo Setup
+    - Download Docker Ubuntu image 20.04
+         https://hub.docker.com/_/ubuntu​
+
+    - Create and start Docker container  emqxee_u  // Docker file at c:\dev\emqxee\SingleNodeEE\dockerfile
+
+    - Downlod and install EMQ X Ubuntu 20.04 on docker container
+         https://www.emqx.com/en/try?product=enterprise​
+
+    - At emqx/etc:  mkdir certs2
+       cd certs2
+       Download scripts from:  https://github.com/zmstone/tls-scripts
+       Put them in the certs2 directory
+
+
+step 0.1 Demo initialization
+         Do these when rerunning demo to return it to an initialized state
+
+       In certs2: delete subdirectories "local" and "cloud" if they exist   // They will be created when generating certificates
+
+       Edit emqx/etc/listeners.conf  to be correct but missing files    // This will demonstrate hot configureation without need to restart broker
+         listeners.ssl.external.keyfile = /opt/emqx/etc/certs2/local/server.key
+         listeners.ssl.external.certfile = /opt/emqx/etc/certs2/local/server-fullchain.pem
+         listeners.ssl.external.verify = verify_none
+
+         listeners.wss.external.keyfile = /opt/emqx/etc/certs2/local/server.key
+         listeners.wss.external.certfile = /opt/emqx/etc/certs2/local/server-fullchain.pem
+         listeners.wss.external.verify = verify_none
+
+       Edit emqx/etc/plugins/emqx_dashboard.conf   to be correct but missing files
+         #dashboard.listener.https.keyfile = /opt/emqx/etc/certs2/local/server.key
+         #dashboard.listener.https.certfile = /opt/emqx/etc/certs2/local/server-fullchain.pem
+         #dashboard.listener.https.verify = verify_none  (make sure commented)
+
+
+- Open Windows Terminal and create following tabs
+   - Tab "Host":  cd \demo\tls
+                  mkdir certs2                           // Make the directory if it doesn't exist
+                  If certs2 exists:
+				        Delete all certificates and keys from local and cloud directories
+                  cp getCerts.bat certs2                 // If it does not already exist in the directory
+                  cp converClientToPxf.bat certs2/local  // If not already there
+
+   - Tab "Workflow": docker exec -it emqxee_u bash
+                   export PS1="\u: \w > "
+                   cd emqx/etc
+                   clear;./workflow.sh steps
+
+   - Tab "Certs2": docker exec -it emqxee_u bash
+                  export PS1="\u: \w > "
+                  cd emqx/etc
+                  mkdir certs2
+
+   - Tab "Config": docker exec -it emqxee_u bash
+                   export PS1="\u: \w > "
+                   cd emqx/etc
+
+   - Tab "Etc": docker exec -it emqxee_u bash
+                  cd emqx/etc
+
+- In Chrome:
+    - Tab: EMQX Cloud
+    - Tab: http://localhost:18083
+            Sign in with username and password:   admin   public
+
+- Open Microsoft Edge:
+     - https://localhost:18084      // In a separate window so that it can be reset
+
+
+- In MQTTX  (optional)   // The demo starts with these created to show TLS connections cannot connect
+                         // Otherwise this can wait until they are needed in the test section
+    Create Local and Cloud collections
+    Create 4 clients in each collection of each possible connection type
+    Clear their history to erase any previous messages    // Three dots (upper right corner) then Clear History
+    Local
+        Host: localhost   (Use CA Signed for now, otherwise will not be saved)
+
+        Name/Client ID      Username/Password   Host        Port    SSL/TLS
+        Local-SSL           Local-SSL           MQTTS       8883    True
+        Local-WSS           Local-WSS           WSS         8884    True
+        Local-TCP           Local-TCP           MQTT        1883    False
+        Local-WS            Local-WS            WS          8083    False
+
+    Cloud
+        Host:   (Use CA Signed for now, otherwise will not be saved)
+        s1ca4a52-internet-facing-e914c80af06e3daf.elb.eu-west-1.amazonaws.com
+
+        Name/Client ID      Username/Password   Host        Port    SSL/TLS
+        Cloud-SSL           client1             MQTTS       8883    True
+        Cloud-WSS           client2             WSS         8884    True
+        Cloud-TCP           client3             MQTT        1883    False
+        Cloud-WS            client4             WS          8083    False
+
+    Verify that MQTT and WS clients can connect
+
+    In EMQX Cloud: Overview page:
+       Delete TLS/SSL Config
+       Connected Ports should show only 1883(mqtt), 8083(ws)
+
+    // Verify that the certificates are not valid
+        openssl s_client localhost:8883     // SSL    Will see write:errno=104    no peer certificate available
+        openssl s_client localhost:8084     // WSS    Will see write:errno=104    no peer certificate available
+        openssl s_client localhost:18084    // HTTPS  Will see connect:errno=111
+
+
+    - In Windows
+        Remove "MyRootCA" from Trusted Root Certificate Authorities
+           Windows: Search "cert"  Control Panel > certmgr > Trusted Root Certificate Authority > Certificates
+		   Remove "MyRootCA" and Intermediate certificates from the Personal tab  certmgr > Personal 
+
+........................
+step 0.2 Check before demo that everything is initialized 
+That everything was set up correctly
+        In MQTTX
+            Local and Cloud groups with four clients in each group using all four connection types
+            Plaintext clients connected but not the others
+            Payload to testtopic/1
+                {
+                    "temperature_c": 25.0,
+                    "temperature_f": 77.0,
+                    "level_m": 7.947214,
+                    "speed_kmh": 158.9443
+                }
+        Dasboard of local broker at localhost:18083 should show 2 clients (Local-TCP, Local-WS) as logged in
+        Dashboard of cloud:
+                TLS/SSL Config should be empty and only connections shown: 1883(mqtt), 8083(ws)
+                should show 2 clients (Cloud-WS, Cloud-TCP) as logged in
+
+        Windows Terminal: Host, Workflow, Certs2, Config, Etc   // Clear and show only the directory contents
+            Host: at c:\demo\tls\certs2
+                   clear  //
+                   ls     // Should show getCerts.bat  convertClientToPxf.bat  and cloud and local directories
+				   ls local  // should have only convertClientToPxf.bat
+				   ls cloud  // should be empty
+
+            Workflow: at /opt/emqx/etc
+                    clear; ./workflow.sh steps
+
+            Certs2: at /opt/emqx/etc/certs
+                   clear
+                   ls     // Should show all the script .sh files but no local or cloud cirectory
+
+            Config: at /opt/emqx/etc
+                   clear
+                   ls
+
+            Etc: at /opt/emqx/etc
+                   clear
+                   ls
+
+        In etc/listeners.conf and plugins/emqx_dashboard.conf
+			Verify that the parameters are set to one-way TLS 
+			
+		In Windows
+            Search "cert" > Manage User Certificates > Trusted Root Certificate Authorities > Certificate
+            MyRootCA should not be shown
+........................
+------------------------------------------------------
+Step 1 - Generate Certificates
+step 1.1 Set certificate parameters
+    In the emqx/certs2 directory
+        source env-config.sh      // This will set up the environment variables for the local certificates
+
+........................
+step 1.2 generate certificates for local and cloud 
+        ./generate-certs.sh       // This will generate the local certificates
+        ls                        // Notice that there is a new directory with a timestamp name: 2022-01xxx:xx:xx
+        mv 2022-01xxx:xx:xx local // Rename this directory to "local"
+        ls local                  // Verify that the certificate files have been generated
+        source env-config.sh cloud  // This will set up the environment variables for the cloud certificates
+       ./generate-certs.sh       // This will generate the local certificates
+        ls                        // Notice that there is a new directory with a timestamp name: 2022-01xxx:xx:xx
+        mv 2022-01xxx:xx:xx cloud // Rename this directory to "cloud"
+        ls cloud                        // Verify that the certificate files have been generated
+        ls                        // Verify that there are two directories: local and cloud
+
+........................
+------------------------------------------------------
+Step 2 - Examine Certificates and Verify keys
+// To get a basic understanding of what the files contain
+    In the certs2/local directory   // Run the scripts from the local directory
+        ../trace.sh ca.pem          // Examine the root certificate
+        ../cacerts_show.sh | grep "MyRootCA"    // Verify that MyRootCA is not in the EMQ X cacerts file
+
+        ../trace.sh server.pem      // Examine the subect, issuer fields
+
+          // Verify that server-fullchain forms a complete correct chain to the root certificate
+        ../trace.sh server-fullchain.pem
+        ../show.sh server-fullchain.pem | grep -iA4 X509  --color   // Examine the X509 extensions
+        ../show.sh server-fullchain.pem | grep -iA2 validity  --color​   // Verify the dates are valid
+        ../verify.sh server         // Verify that the server keys are valid   Assumes server.key  server.pem
+                                    // key_cert_verify.sh  accepts any two key/certificate file name
+
+        // Repeat the above for the client files
+      // Repeat for the files in the certs/cloud directory
+            // Note that the ca.pem files may look the same but they are different files and cannot be mixed
+             In the certs2/cloud directory:
+                ../show.sh  ca.pem | grep -iA1 "serial number"
+                ../show.sh  ../local/ca.pem | grep -iA1 "serial number"
+                Note that the serial numbers are different
+
+            // Note that cloud/server-fullchian.pem is using a Subject Alternative Name (SAN)
+            // So you need to look at the X509 extensions to verify the full chain
+            From the certs2/cloud directory
+              ../trace.sh server-fullchain.pem
+              ../show.sh server-fullchain.pem | grep -iA4 X509  --color   // Examine the X509 extensions
+
+------------------------------------------------------
+Step 3 - Map EMQ X (on-prem and cloud) parameters one-way TLS to the certificate files
+step 3.1 Map EMQ X on-prem parameters one-way TLS to the certificate files (local directory)
+    In the emqx/etc directory
+        nano listeners.conf         // or use your favorite editor
+        Edit the following parameters as shown
+         listeners.ssl.external.keyfile = /opt/emqx/etc/certs2/local/server.key
+         listeners.ssl.external.certfile = /opt/emqx/etc/certs2/local/server-fullchain.pem
+         listeners.ssl.external.verify = verify_none
+
+         listeners.wss.external.keyfile = /opt/emqx/etc/certs2/local/server.key
+         listeners.wss.external.certfile = /opt/emqx/etc/certs2/local/server-fullchain.pem
+         listeners.wss.external.verify = verify_none
+
+    In the emqx/etc/plugins directory
+        nano emqx_dashboard.conf   // or use your favorite editor
+        Edit the following parameters as shown
+         dashboard.listener.https.keyfile = /opt/emqx/etc/certs2/local/server.key
+         dashboard.listener.https.certfile = /opt/emqx/etc/certs2/local/server-fullchain.pem
+         dashboard.listener.https.verify = verify_none
+
+    The broker will automatically load the certificates in a few minutes
+    To force the broker to load the certificates immediately
+        emqx/bin/emqx stop                  // Execute emqx stop in the bin directory
+        emqx/bin/emqx start
+        You should see a successful startup message
+
+........................
+step 3.2 Copy docker image certificate files to host computer
+    For the dockeers demo, the certificate files need to be copied to the host
+        On the host computer, in a terminal window
+        cd <some direcory on the host >     // Choose a directory to download the certificate files to
+        copy the getCerts.bat script to the directory
+        copy the converClientToPxf.bat script to the directory
+        getCerts.bat 2                      // This will get all the certifiates from the docker directory: /opt/emqx/etc/certs2
+
+
+........................
+step 3.3 Map EMQ X cloud parameters one-way TLS to the certificate files (cloud directory)
+    For EMQ X Cloud
+        In your browser
+        Open your EMQ X Cloud deployment
+        In the Overview page > TLS/SSL Config section > Add TLS/SSL Config
+        In TLS/SSL Type choose one-way
+        Using the Upload button add the following files.  Make sure to add them from the cloud directory
+            Certificate body: cloud/server.pem
+            Certificate chain: cloud/server-fullchian.pem
+            Certificate private key: cloud/server.key
+        Press Confirm
+        You should see TLS/SSL status as pending.
+        In a few minutes it will change to running
+
+........................
+------------------------------------------------------
+Step 4 - Test certificates using openssl s_client
+    In EMQ X on-prem
+    In the emqx/etc/certs2/local directory      // First test the on-prem broker
+        ../sclient-ssl.sh                       // Verify SSL contain
+        The first line shows the s_client command called from the script
+        openssl s_client -CAfile /opt/emqx/etc/certs2/local/ca.pem -verify_hostname localhost -tlsextdebug -state -debug -connect localhost:8883
+        To see less verbose output remove -tlsextdebug -state -debug
+        You should see a lot of verbose output including:  // You shoud not see any errors
+            Verification: OK
+            Verified peername: localhost
+            Verify return code: 0 (ok)
+
+        ../sclient-wss.sh                       // Verify the wss connection
+        You should see a similar output to the above
+
+        ../sclient-https.sh
+        You should see a similar output to the above
+
+        ../sclient-wss.sh | grep errno          // check for errors
+        The output will not be what you expect  // The s_client command writes to both stdout and stderr, but grep is filtering only stdout
+
+        ../sclient-wss.sh 2>&1 | grep errno     // This routes stderr to stdout before being piped to grep
+            read:errno=0                        // After a few seconds you should see this.  errno=0 is ok
+
+------------------------------------------------------
+Step 5 - Test certificates using MQTTX
+    In MQTTX
+      If not already created
+        Click New Collection and ceate Local and Cloud collections
+        Create 4 clients in each collection of each possible connection type. Click the plus + icon to create the clients
+        Click Connect to connect each client to its broker
+        Local
+            Host: Domain for EMQ X on-prem (example: localhost)
+
+            Name/Client ID      Username/Password   Host        Port    SSL/TLS                           CA File
+            Local-SSL           Local-SSL           MQTTS       8883    True, Self signed, SSL Secure     local/ca.pem
+            Local-WSS           Local-WSS           WSS         8884    True, Self signed, SSL Secure     local/ca.pem
+            Local-TCP           Local-TCP           MQTT        1883    False
+            Local-WS            Local-WS            WS          8083    False
+
+        Cloud
+            Host: Domain for EMQ X Cloud  (example: s1....amazonaws.com
+
+            Name/Client ID      Username/Password   Host        Port    SSL/TLS                           CA File
+            Cloud-SSL           client1             MQTTS       8883    True, Self signed, SSL Secure     cloud/ca.pem
+            Cloud-WSS           client2             WSS         8884    True, Self signed, SSL Secure     cloud/ca.pem
+            Cloud-TCP           client3             MQTT        1883    False
+            Cloud-WS            client4             WS          8083    False
+
+        For each client
+            Click New Subscription
+            Leave the Topic as the default testtopic/# and press confirm
+
+        All clients will now be subscribed to topic testtopic and all subtopics
+        Verify that the cloud clients and their subscriptions are listed in EMQ X Cloud Monitor page
+        Verify that the local clients and their subscriptions are listed in EMQ X on-prem Clients and Subscriptions page
+
+        Choose one of the clients in the Local group.
+        Paste the following message in the Payload section.
+            {
+                "temperature_c": 25.0,
+                "temperature_f": 77.0,
+                "level_m": 7.947214,
+                "speed_kmh": 158.9443
+            }
+        Press the green button (lower right corner) to publish the message.
+        Verify that all clients in the Local group receive the message.
+        (You should see the message for the selected client and a "1" for all other clients that received the message.
+        Select each client with a "1" and verify that they have received the message
+        Repeat for a client in the Cloud group and verify that all clients in that group received the message
+
+----------------------------
+Step 6 - Add root CA certificate to browser and test HTTPS
+    In a browser
+    Navigate to https://localhost:18084
+    Microsoft Edge: Click Not Secure > Your connection to the site isn't secure > Show certificate icon (upper right)
+    Chrome: Click Not Secure > Your certificate is not valid
+    Click Certificate path and select MyIntermediateCA-1
+    Click View Certificate
+    Notice that issuer is MyRootCA      // MyRootCA  needs to be added to the browers trusted roots
+
+    For Chrome:
+        Three dots (upper right corner) > Settings
+        In search, type "cert"
+        Security > Manage Certificates
+        Trust Root Certificate Authorities
+
+    For Edge:
+        In browser: edge://settings/privacy
+        In search: type "cert"
+        Manage Certificates
+        Trusted Root Certificate Authorities
+
+    In Certificates dialog box
+        Selected Trusted Root Certificate Authorities
+        Verify that MyRootCA is not included in list        // Remove it if it is
+        Click Import
+        Follow wizard instructions
+        Browse to local/ca.pem                  // May need to set file type to All Files to see it
+        Confirm import
+        Verify that MyRootCA is in the list
+        Restart browser
+        Navigate to https://localhost:18084     // Verify that lock symbol is shown
+        Click lock symbol
+        Navigate to Certificate Path and verify that the MyRootCA is also shown
+
+
+------------------------------------------------------
+Step 7 - Change brokers to use two-way TLS
+    In EMQ X on-prem
+    In the emqx/etc directory
+        nano listeners.conf     // Edit the listeners.conf file
+        listener.ssl.external.verify = verify_peer            // This forces two-way TLS for ssl connections
+        listener.ssl.external.fail_if_no_peer_cert = true     // Fails if clients does not send a certificate
+
+        listener.wss.external.verify = verify_peer            // This forces two-way TLS for wss connections
+        listener.wss.external.fail_if_no_peer_cert = true     // Fails if clients does not send a certificate
+
+    The broker will automatically load the certificates in a few minutes
+    To force the broker to load the certificates immediately
+        emqx/bin/emqx stop                  // Execute emqx stop in the bin directory
+        emqx/bin/emqx start
+        You should see a successful startup message
+
+    For EMQ X Cloud
+        In your browser
+        Open your EMQ X Cloud deployment
+        In the Overview page > TLS/SSL Config section
+        Click the trash can icon to delete the existing one-way TLS connection
+        Click Add TLS/SSL Config to add a two-way TLS configuration
+        In TLS/SSL Type choose two-way
+        Using the Upload button add the following files.  Make sure to add them from the cloud directory
+            Certificate body: cloud/server.pem              // Same file as for one-way TLS
+            Certificate chain: cloud/server-fullchian.pem   // Same file as for one-way TLS
+            Certificate private key: cloud/server.key       // Same file as for one-way TLS
+            Client CA certificate:  cloud/ca.pem            // New file for the client CA root certificate
+        Press Confirm
+        You should see TLS/SSL status as pending.
+        In a few minutes it will change to running
+
+----------------------------
+Step 8 - Test two-way TLS
+step 8.1 Test two-way TLS with MQTTX
+    In MQTTX
+        For all clients:
+            Disconnect the clients          // Disconnect icon located at upper rightcorner
+            Clear the previous messages if desired    // Three dots (upper right corner) then choose Clear History
+            Attempt to reconnect the client // SSL clients will not connect
+        SSL clients will not connect    // Need to add the client certificate and private key file
+        For the Local SSL clients
+            Click the edit icon         // Edit icon located at upper right corner
+            Add the following files:
+                Client Certificate File: local/client-fullchain.pem
+                Client key file: local/client.key
+            Click connect and the client should connect
+
+        For the Local Cloud clients
+            Click the edit icon         // Edit icon located at upper right corner
+            Add the following files:
+                Client Certificate File: cloud/client-fullchain.pem
+                Client key file: cloud/client.key
+            Click connect and the client should connect
+
+        All the clients should now be connected (shown in green)
+        Note: MQTTX will automatically subscribe the clients to their subscribed topics
+        Verify that the cloud clients and their subscriptions are listed in EMQ X Cloud Monitor page
+        Verify that the local clients and their subscriptions are listed in EMQ X on-prem Clients and Subscriptions page
+
+        Choose one of the clients in the Local group.
+        Paste the following message in the Payload section.
+            {
+                "temperature_c": 25.0,
+                "temperature_f": 77.0,
+                "level_m": 7.947214,
+                "speed_kmh": 158.9443
+            }
+        Press the green button (lower right corner) to publish the message.
+        Verify that all clients in the Local group receive the message.
+        (You should see the message for the selected client and a "1" for all other clients that received the message.
+        Select each client with a "1" and verify that they have received the message
+        Repeat for a client in the Cloud group and verify that all clients in that group received the message
+
+........................
+step 8.2 Test two-way TLS with HTTPS in browser
+    In your browser:
+        Connect to https://localhost:18084 and verify that you cannot connect
+        This is because you have not included your client certificate in your browser
+
+    You need to add the client-fullchain certificate to the browser
+    Depending on your operating system, you may need to convert it from pem to another format such as pxf
+    On the host computer
+       Copy the convertClientToPxf.bat script to the same directory as the local certificate files
+       convertClientToPxf.bat       // This will convert the client-fullchain.pem file to client-fullchain.pxf
+
+    The client-fullchain.pxf file will be added to the Personal certificates
+    For Chrome:
+        Three dots (upper right corner) > Settings
+        In search, type "cert"
+        Security > Manage Certificates
+        Personal
+
+    For Edge:
+        In browser: edge://settings/privacy
+        In search: type "cert"
+        Manage Certificates
+        Personal
+
+    In Certificates dialog box
+        Personal
+        Verify that the MyIntermediateCA-2 is not already in the list  // Remove it if it is
+        Click Import
+        Follow wizard instructions
+        Browse to local/client-fullchain.pxf     // May need to set file type to All Files to see it
+        Confirm import
+        Verify that MyIntermediateCA-2 is in the list
+        Restart browser
+        Navigate to https://localhost:18084
+        The browser will prompt you to choose your personal certificate
+        Choose your certificate
+        You should now be connected to the local dashboard using two-way TLS/SSL
+
+........................
+Step 9 - Demo is complete
+----------- End of Demo ----------------
