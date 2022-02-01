@@ -1,168 +1,61 @@
-Step 0 - Demo Setup
+Step 0 - Tutorial Setup: Docker Ubuntu image on Windows host computer
+step 0.1 Download docker image, EMQ X, and webinar scripts
     - Download Docker Ubuntu image 20.04
          https://hub.docker.com/_/ubuntu​
+         docker pull ubuntu:20.04
 
-    - Create and start Docker container  emqxee_u  // Docker file at c:\dev\emqxee\SingleNodeEE\dockerfile
+    - To create and start Docker container named emqxee_u
+          Need to expose the ports as shown in the docker run command
+          This will map "some_directory_on_windows"  to a directory called certs_host in the docker conatainer
+          docker run --name emqxee_u -p 18084:18084 -p 18083:18083 -p 8883:8883 -p 8084:8084 -p 1883:1883  -p 8081:8081 -p 8083:8083 -it --hostname emqxee -v  C:\some_directory_on_windows\certs_host:/opt/emqx/etc/certs_host image_name bash
 
     - Downlod and install EMQ X Ubuntu 20.04 on docker container
          https://www.emqx.com/en/try?product=enterprise​
+         https://docs.emqx.com/en/enterprise/v4.4/getting-started/install-ee.html    // EMQ X installation instructions
 
-    - At emqx/etc:  mkdir certs2
-       cd certs2
-       Download scripts from:  https://github.com/zmstone/tls-scripts
-       Put them in the certs2 directory
-
-
-step 0.1 Demo initialization
-         Do these when rerunning demo to return it to an initialized state
-
-       In certs2: delete subdirectories "local" and "cloud" if they exist   // They will be created when generating certificates
-
-       Edit emqx/etc/listeners.conf  to be correct but missing files    // This will demonstrate hot configureation without need to restart broker
-         listeners.ssl.external.keyfile = /opt/emqx/etc/certs2/local/server.key
-         listeners.ssl.external.certfile = /opt/emqx/etc/certs2/local/server-fullchain.pem
-         listeners.ssl.external.verify = verify_none
-
-         listeners.wss.external.keyfile = /opt/emqx/etc/certs2/local/server.key
-         listeners.wss.external.certfile = /opt/emqx/etc/certs2/local/server-fullchain.pem
-         listeners.wss.external.verify = verify_none
-
-       Edit emqx/etc/plugins/emqx_dashboard.conf   to be correct but missing files
-         #dashboard.listener.https.keyfile = /opt/emqx/etc/certs2/local/server.key
-         #dashboard.listener.https.certfile = /opt/emqx/etc/certs2/local/server-fullchain.pem
-         #dashboard.listener.https.verify = verify_none  (make sure commented)
-
+    - In the directory "some_directory_on_your_host_computer"
+       mkdir scripts
+       Download tutorial scripts from:  https://github.com/emqx/emqx-webinars/tree/main/2022-02-09-emqx-tls/scripts
+       Put them in "some_directory_on_your_host_computer"/scripts
+_____________________
+step 0.2 Create command prompt windows or use Windows Terminal
 
 - Open Windows Terminal and create following tabs
-   - Tab "Host":  cd \demo\tls
-                  mkdir certs2                           // Make the directory if it doesn't exist
-                  If certs2 exists:
-				        Delete all certificates and keys from local and cloud directories
-                  cp getCerts.bat certs2                 // If it does not already exist in the directory
-                  cp converClientToPxf.bat certs2/local  // If not already there
+   - Tab "Host":  cd "some_directory_on_your_host_computer"   // The same one that was mapped to the docker container
 
    - Tab "Workflow": docker exec -it emqxee_u bash
                    export PS1="\u: \w > "
-                   cd emqx/etc
+                   cd emqx/etc/certs2
                    clear;./workflow.sh steps
 
    - Tab "Certs2": docker exec -it emqxee_u bash
                   export PS1="\u: \w > "
                   cd emqx/etc
                   mkdir certs2
+                  cd certs2
+                  openssl version   // verify that openssl is installed and which version is being used
+                  clear;ls
 
    - Tab "Config": docker exec -it emqxee_u bash
                    export PS1="\u: \w > "
                    cd emqx/etc
-
-   - Tab "Etc": docker exec -it emqxee_u bash
-                  cd emqx/etc
-
-- In Chrome:
-    - Tab: EMQX Cloud
-    - Tab: http://localhost:18083
-            Sign in with username and password:   admin   public
-
-- Open Microsoft Edge:
-     - https://localhost:18084      // In a separate window so that it can be reset
-
-
-- In MQTTX  (optional)   // The demo starts with these created to show TLS connections cannot connect
-                         // Otherwise this can wait until they are needed in the test section
-    Create Local and Cloud collections
-    Create 4 clients in each collection of each possible connection type
-    Clear their history to erase any previous messages    // Three dots (upper right corner) then Clear History
-    Local
-        Host: localhost   (Use CA Signed for now, otherwise will not be saved)
-
-        Name/Client ID      Username/Password   Host        Port    SSL/TLS
-        Local-SSL           Local-SSL           MQTTS       8883    True
-        Local-WSS           Local-WSS           WSS         8884    True
-        Local-TCP           Local-TCP           MQTT        1883    False
-        Local-WS            Local-WS            WS          8083    False
-
-    Cloud
-        Host:   (Use CA Signed for now, otherwise will not be saved)
-        s1ca4a52-internet-facing-e914c80af06e3daf.elb.eu-west-1.amazonaws.com
-
-        Name/Client ID      Username/Password   Host        Port    SSL/TLS
-        Cloud-SSL           client1             MQTTS       8883    True
-        Cloud-WSS           client2             WSS         8884    True
-        Cloud-TCP           client3             MQTT        1883    False
-        Cloud-WS            client4             WS          8083    False
-
-    Verify that MQTT and WS clients can connect
-
-    In EMQX Cloud: Overview page:
-       Delete TLS/SSL Config
-       Connected Ports should show only 1883(mqtt), 8083(ws)
-
-    // Verify that the certificates are not valid
-        openssl s_client localhost:8883     // SSL    Will see write:errno=104    no peer certificate available
-        openssl s_client localhost:8084     // WSS    Will see write:errno=104    no peer certificate available
-        openssl s_client localhost:18084    // HTTPS  Will see connect:errno=111
-
-
-    - In Windows
-        Remove "MyRootCA" from Trusted Root Certificate Authorities
-           Windows: Search "cert"  Control Panel > certmgr > Trusted Root Certificate Authority > Certificates
-		   Remove "MyRootCA" and Intermediate certificates from the Personal tab  certmgr > Personal 
-
+                   ../bin/emqx start     // Start the EMQ X broker
+                   clear;ls
 _____________________
-step 0.2 Check before demo that everything is initialized 
-That everything was set up correctly
-        In MQTTX
-            Local and Cloud groups with four clients in each group using all four connection types
-            Plaintext clients connected but not the others
-            Payload to testtopic/1
-                {
-                    "temperature_c": 25.0,
-                    "temperature_f": 77.0,
-                    "level_m": 7.947214,
-                    "speed_kmh": 158.9443
-                }
-        Dasboard of local broker at localhost:18083 should show 2 clients (Local-TCP, Local-WS) as logged in
-        Dashboard of cloud:
-                TLS/SSL Config should be empty and only connections shown: 1883(mqtt), 8083(ws)
-                should show 2 clients (Cloud-WS, Cloud-TCP) as logged in
-
-        Windows Terminal: Host, Workflow, Certs2, Config, Etc   // Clear and show only the directory contents
-            Host: at c:\demo\tls\certs2
-                   clear  //
-                   ls     // Should show getCerts.bat  convertClientToPxf.bat  and cloud and local directories
-				   ls local  // should have only convertClientToPxf.bat
-				   ls cloud  // should be empty
-
-            Workflow: at /opt/emqx/etc
-                    clear; ./workflow.sh steps
-
-            Certs2: at /opt/emqx/etc/certs
-                   clear
-                   ls     // Should show all the script .sh files but no local or cloud cirectory
-
-            Config: at /opt/emqx/etc
-                   clear
-                   ls
-
-            Etc: at /opt/emqx/etc
-                   clear
-                   ls
-
-        In etc/listeners.conf and plugins/emqx_dashboard.conf
-			Verify that the parameters are set to one-way TLS 
-			
-		In Windows
-            Search "cert" > Manage User Certificates > Trusted Root Certificate Authorities > Certificate
-            MyRootCA should not be shown
+step 0.3 Start the EMQ X dashboard and Cloud deployment
+- In a browser:
+    - Tab: EMQ X Cloud   // Open an EMQ X Cloud Professional deployment at the Overview page
+    - Tab: http://localhost:18083    // The EMQ X on prem dashboard
+            Sign in with username and password:   admin   public
 _____________________
 ------------------------------------------------------
 Step 1 - Generate Certificates
 step 1.1 Set certificate parameters
+     Edit the env-config file to be your correct server and client domains
+_____________________
+step 1.2 Generate certificates for local and cloud
     In the emqx/certs2 directory
         source env-config.sh      // This will set up the environment variables for the local certificates
-
-_____________________
-step 1.2 generate certificates for local and cloud 
         ./generate-certs.sh       // This will generate the local certificates
         ls                        // Notice that there is a new directory with a timestamp name: 2022-01xxx:xx:xx
         mv 2022-01xxx:xx:xx local // Rename this directory to "local"
